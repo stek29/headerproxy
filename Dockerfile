@@ -1,4 +1,4 @@
-FROM python:3.13.0-slim as builder
+FROM python:3.13.0-slim AS builder
 
 WORKDIR /app
 
