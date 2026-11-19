@@ -73,8 +73,8 @@ jobs:
         with:
           owner: ${{ github.repository_owner }}
           package: ${{ github.event.repository.name }}
-          exclude-tags: ^(latest|main|[0-9]+\.[0-9]+(\.[0-9]+)?)$
-          use-regex: true
+          # *.* matches the X.Y and X.Y.Z version tags.
+          exclude-tags: latest,main,*.*
           keep-n-tagged: 3
           delete-untagged: true
           # Leaves a build that another run is still pushing alone.
