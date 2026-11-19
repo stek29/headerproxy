@@ -1,0 +1,82 @@
+# linux/amd64 + linux/arm64 image at ghcr.io/<owner>/<repo>. main → :latest, :main and :sha-<short>; a tag vX.Y.Z →
+# :X.Y.Z and :X.Y; pull requests only build. After each publish, cleanup keeps those named tags and the three newest
+# other builds and deletes the rest; run the workflow manually with dry-run to preview a cleanup.
+name: Image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only log what cleanup would delete
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  cleanup:
+    needs: image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    concurrency:
+      group: ghcr-cleanup
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        with:
+          owner: ${{ github.repository_owner }}
+          package: ${{ github.event.repository.name }}
+          exclude-tags: ^(latest|main|[0-9]+\.[0-9]+(\.[0-9]+)?)$
+          use-regex: true
+          keep-n-tagged: 3
+          delete-untagged: true
+          # Leaves a build that another run is still pushing alone.
+          older-than: 1 hour
+          dry-run: true
