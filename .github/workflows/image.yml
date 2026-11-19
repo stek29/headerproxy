@@ -79,4 +79,4 @@ jobs:
           delete-untagged: true
           # Leaves a build that another run is still pushing alone.
           older-than: 1 hour
-          dry-run: true
+          dry-run: ${{ inputs.dry-run == true }}
